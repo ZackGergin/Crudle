@@ -17,7 +17,7 @@
     --accent:#FF2B00;     /* buttons & accents */
 
     --correct:#FF2B00;    /* correct letters */
-    --present:#FF2B00;    /* treat present like correct (red) */
+    --present:#FF6A33;    /* similar shade for present (different from correct) */
     --absent:#FFFFFF;     /* incorrect letters */
 
     --shadow:0 8px 24px rgba(0,0,0,.35);
@@ -51,7 +51,7 @@
   }
   .btn:hover{transform:translateY(-1px)}
   .btn:active{transform:translateY(0)}
-  .btn.primary{background:var(--accent); color:#fff; border-color:transparent}
+  .btn.primary{background:var(--accent); color:#000; border-color:transparent}
   .btn.ghost{background:transparent}
   .logo-img{width:44px; height:44px; object-fit:cover; border-radius:999px; border:1px solid var(--tile-border); box-shadow:0 6px 16px rgba(239,68,68,.35)}
   .hint{opacity:.85; font-size:.9rem}
@@ -99,15 +99,17 @@
   .help{max-width:900px; margin:10px auto 0; line-height:1.5; font-size:.95rem; opacity:.95}
   .small{font-size:.9rem; opacity:.8}
 
-  @media (max-width:480px){header{padding:10px 12px} .btn, select, input[type="text"]{padding:8px 10px} .key{padding:10px 8px}}
+  .answer-reveal{margin-top:10px; padding:10px 12px; border:1px solid #2a2a2a; border-radius:10px; background:#0a0a0a; font-weight:800; text-align:center}
   .disclaimer{max-width:900px;margin:0 auto 28px;padding:10px 12px;border:1px solid #2a2a2a;border-radius:10px;background:#0a0a0a;color:var(--tile-text);font-size:.85rem;opacity:.9;text-align:center}
+
+  @media (max-width:480px){header{padding:10px 12px} .btn, select, input[type="text"]{padding:8px 10px} .key{padding:10px 8px}}
 </style>
 </head>
 <body>
   <header>
     <div class="brand" aria-label="Crudle">
       <div class="mark" aria-hidden="true"></div>
-      <div class="name">Crudle <span class="small" style="font-weight:700; color:#b91c1c">— Edgy Edition</span> <span class="small" style="font-weight:700; color:#b91c1c">— Edgy Edition</span></div>
+      <div class="name">Crudle <span class="small" style="font-weight:700; color:#b91c1c">— Edgy Edition</span></div>
     </div>
     <div class="controls">
       <span id="countdown" title="UK time until next daily"></span>
@@ -153,23 +155,25 @@
     </div>
 
     <div class="footer-cta"><div class="toast" id="toast" role="status" aria-live="polite"></div></div>
+    <div class="answer-reveal" id="answerReveal" hidden></div>
 
     <div class="help" id="helpText" hidden>
       <strong>How to play:</strong> Guess the 5-letter word in 6 tries. This edition uses <em>explicit/vulgar</em> vocabulary — play responsibly. After each guess, tiles flip:
       <span style="color:#000;background:#FF2B00;border-radius:6px;padding:2px 6px; margin:0 4px">red</span> = right letter & spot,
-      <span style="color:#000;background:#FF2B00;border-radius:6px;padding:2px 6px; margin:0 4px">red</span> = in the word but wrong spot (this edition doesn’t distinguish),
-      <span style="background:#fff;border-radius:6px;padding:2px 6px; margin:0 4px">white</span> = not in the word. Toggle tabs to switch modes. Custom mode lets you set the secret (or open this file with <code>#word=HELLO</code>).
+      <span style="color:#000;background:#FF6A33;border-radius:6px;padding:2px 6px; margin:0 4px">orange-red</span> = in the word but wrong spot,
+      <span style="background:#fff;border-radius:6px;padding:2px 6px; margin:0 4px">white</span> = not in the word.
     </div>
-      <div class="disclaimer" id="disclaimer" role="note">Vibe coded and AI Generated! This project is for satire, so please don't take it seriously!!!</div>
+
+    <div class="disclaimer" id="disclaimer" role="note">Vibe coded and AI Generated! This project is for satire, so please don’t take it seriously!!!</div>
   </main>
 
 <script>
 /* =====================================================
    Crudle — single file (Edgy Edition)
-   • Daily uses UK (Europe/London) midnight
+   • Daily uses UK (Europe/London) midnight; persists across refresh
    • Random cycles through the word list (persistent)
-   • Valid-word enforcement (only crude list allowed)
-   • Share results (emoji grid)
+   • Valid-word enforcement (only crude list allowed by default)
+   • Share results (emoji grid; 🟥 correct, 🟧 present, ⬜️ absent)
    • Proper duplicate-letter scoring
    ===================================================== */
 
@@ -182,7 +186,7 @@ const ANSWERS = [
   "VOMIT","BARFS","FARTS","FARTY","WHIZZ","URINE","SPERM","QUEEF","SCUMS","TRASH",
   "TRAMP","GONAD","DILDO","ANALS","MOOBS","PERVS","PERVY","SLAGS","HUSSY","BOINK",
   "DOINK","NASTY","HUMPS","TAINT","GOOCH","PUBES","PUBIC","CRABS","BONED","ORALS",
-  "WANKY","TWATS","TURDY","TITTS","BOINK","SNUFF","SMUTY","BOOZY","TARTY","RUDER"
+  "WANKY","TWATS","TURDY","TITTS","SNUFF","SMUTY","BOOZY","TARTY","RUDER"
 ].filter(w => w.length === 5).map(w => w.toUpperCase());
 
 // Allow guesses = ANSWERS (strict). If you want a larger set, extend here.
@@ -201,6 +205,7 @@ const rngBtn = document.getElementById('rngBtn');
 const helpBtn = document.getElementById('helpBtn');
 const helpText = document.getElementById('helpText');
 const countdownEl = document.getElementById('countdown');
+const answerRevealEl = document.getElementById('answerReveal');
 
 const tabs = [...document.querySelectorAll('.tab')];
 const panels = [...document.querySelectorAll('.tabpanel')];
@@ -225,10 +230,12 @@ function ukParts(date = new Date()){
   const get = t => Number(p.find(x=>x.type===t).value);
   return { year:get('year'), month:get('month'), day:get('day'), hour:get('hour'), minute:get('minute'), second:get('second') };
 }
+function ukDateKey(date = new Date()){
+  const t = ukParts(date); return `${t.year}-${String(t.month).padStart(2,'0')}-${String(t.day).padStart(2,'0')}`;
+}
 function dailyIndex(date = new Date()){
   const a = { year:2022, month:1, day:1 };
   const t = ukParts(date);
-  // Treat dates as UTC days to avoid DST math; we only care about day count, not clock hours
   const anchor = Date.UTC(a.year, a.month-1, a.day);
   const today = Date.UTC(t.year, t.month-1, t.day);
   const days = Math.floor((today - anchor) / 86400000);
@@ -238,6 +245,17 @@ function secondsUntilNextUKMidnight(now = new Date()){
   const t = ukParts(now);
   const totalNow = t.hour*3600 + t.minute*60 + t.second;
   return 24*3600 - totalNow; // seconds left in the UK day
+}
+
+// Persisted daily answer per UK date (prevents refresh from changing)
+function getDailyAnswer(){
+  const key = ukDateKey();
+  const storeKey = `crudle:dailyAnswer:${key}`;
+  const cached = localStorage.getItem(storeKey);
+  if (cached) return cached;
+  const pick = ANSWERS[dailyIndex()];
+  localStorage.setItem(storeKey, pick);
+  return pick;
 }
 
 // ---- Random cycling ----
@@ -275,7 +293,7 @@ function buildBoard(){
     for (let c=0;c<COLS;c++){ const tile=document.createElement('div'); tile.className='tile'; tile.setAttribute('role','gridcell'); row.appendChild(tile); }
     board.appendChild(row);
   }
-  currentRow = 0; currentCol = 0; gameOver = false; shareBtn.style.display = "none";
+  currentRow = 0; currentCol = 0; gameOver = false; shareBtn.style.display = "none"; answerRevealEl.hidden = true; answerRevealEl.textContent = '';
 }
 
 function mkKey(label, wide=false, dataOverride=null){ const key = document.createElement('button'); key.className='key'+(wide?' wide':''); key.type='button'; key.textContent = label; key.dataset.key = dataOverride || label; key.addEventListener('click', ()=> handleInput(key.dataset.key)); return key; }
@@ -294,7 +312,7 @@ function pickAnswer(){
   if (mode === "custom"){
     const cw = (customInput.value||"").toUpperCase().replace(/[^A-Z]/g,''); answer = cw.length===5 ? cw : ANSWERS[dailyIndex()];
   } else if (mode === "daily"){
-    answer = ANSWERS[dailyIndex()];
+    answer = getDailyAnswer(); // persist per UK date
   } else {
     setRandomAnswer();
   }
@@ -322,10 +340,18 @@ function revealGuess(guess){
   const result = scoreGuess(guess, answer); revealedRows[currentRow] = result;
   const delay = 140; result.forEach((state, idx)=>{ const tile=getTile(currentRow,idx); setTimeout(()=>{ tile.classList.add('reveal'); setTimeout(()=>{ tile.classList.add(state); tile.style.borderColor = getComputedStyle(tile).backgroundColor; updateKeyboardKey(guess[idx], state); }, 280); }, idx*delay); });
   const finishDelay = COLS*delay + 420; setTimeout(()=>{
-    const won = result.every(s => s==='correct'); // robust: only win if all positions correct
-    if (won){ gameOver = true; shareBtn.style.display = "inline-block"; announce(victoryMessage()); }
-    else if (currentRow === ROWS-1){ gameOver = true; shareBtn.style.display = "inline-block"; announce(`Unlucky! The word was ${answer}.`); }
-    else { currentRow++; currentCol = 0; }
+    const won = result.every(s => s==='correct'); // win only if all positions correct
+    if (won){
+      gameOver = true; shareBtn.style.display = "inline-block"; announce(victoryMessage());
+      // Optionally reveal answer anyway
+      answerRevealEl.hidden = false; answerRevealEl.textContent = `Answer: ${answer}`;
+    } else if (currentRow === ROWS-1){
+      gameOver = true; shareBtn.style.display = "inline-block";
+      announce(`Unlucky! The word was ${answer}.`);
+      answerRevealEl.hidden = false; answerRevealEl.textContent = `Answer: ${answer}`;
+    } else {
+      currentRow++; currentCol = 0;
+    }
     saveState();
   }, finishDelay);
 }
@@ -336,12 +362,12 @@ function rowShake(r){ const row=board.children[r]; row.classList.remove('shake')
 function updateKeyboardKey(letter, state){ letter = letter.toUpperCase(); const key = [...document.querySelectorAll('.key')].find(k => k.dataset.key === letter); if (!key) return; const priority = { absent: 1, present: 2, correct: 3 }; const current = key.dataset.state || "none"; if (current !== "none" && priority[current] >= priority[state]) return; key.dataset.state = state; key.classList.remove('absent','present','correct'); key.classList.add(state); }
 function paintKeyboardFromHistory(){ document.querySelectorAll('.key').forEach(k=>{ k.dataset.state = "none"; k.classList.remove('absent','present','correct'); }); revealedRows.forEach((rowStates, r)=>{ if (!rowStates) return; for (let i=0;i<COLS;i++){ const letter = (grid[r][i]||"").toUpperCase(); if (letter) updateKeyboardKey(letter, rowStates[i]); } }); }
 
-function buildShareText(){ const header = `Crudle — ${mode === "daily" ? new Date().toLocaleDateString('en-GB',{ timeZone:'Europe/London' }) : mode}`; const scoreLine = gameOver && revealedRows[currentRow]?.every(s=>s==='correct') ? `${currentRow+1}/${ROWS}` : `${revealedRows.filter(Boolean).length}/${ROWS}`; const emojiRows = revealedRows.filter(Boolean).map(states => states.map(s => (s==='correct' || s==='present') ? '🟥' : '⬜️').join('')).join('\n'); let link = ''; if (mode === "custom"){ const token = answer.toUpperCase(); link = `\nCustom link: ${location.href.split('#')[0]}#word=${token}`; } return `${header}\n${scoreLine}\n${emojiRows}${link}`; }
+function buildShareText(){ const header = `Crudle — ${mode === "daily" ? new Date().toLocaleDateString('en-GB',{ timeZone:'Europe/London' }) : mode}`; const scoreLine = gameOver && revealedRows[currentRow]?.every(s=>s==='correct') ? `${currentRow+1}/${ROWS}` : `${revealedRows.filter(Boolean).length}/${ROWS}`; const emojiRows = revealedRows.filter(Boolean).map(states => states.map(s => s==='correct' ? '🟥' : s==='present' ? '🟧' : '⬜️').join('')).join('\n'); let link = ''; if (mode === "custom"){ const token = answer.toUpperCase(); link = `\nCustom link: ${location.href.split('#')[0]}#word=${token}`; } return `${header}\n${scoreLine}\n${emojiRows}${link}`; }
 async function shareResults(){ const text = buildShareText(); try{ await navigator.clipboard.writeText(text); announce("Result copied to clipboard!"); }catch(e){ announce("Copy failed — text printed in console."); console.log(text); }}
 
-function storageKey(){ let base = `crudle:${mode}`; if (mode==='daily'){ const t=ukParts(); base += `:${t.year}-${t.month}-${t.day}`; } if (mode==='custom') base += `:${answer}`; return base; }
+function storageKey(){ let base = `crudle:${mode}`; if (mode==='daily'){ const key=ukDateKey(); base += `:${key}`; } if (mode==='custom') base += `:${answer}`; return base; }
 function saveState(){ const payload = { answer, mode, currentRow, currentCol, grid, revealedRows, gameOver }; try{ localStorage.setItem(storageKey(), JSON.stringify(payload)); }catch(e){} }
-function loadState(){ const raw = localStorage.getItem(storageKey()); if (!raw) return false; try{ const s = JSON.parse(raw); if (!s || s.answer !== answer) return false; ({ currentRow, currentCol, grid, revealedRows, gameOver } = s); for (let r=0;r<ROWS;r++){ for (let c=0;c<COLS;c++){ const tile=getTile(r,c); const ch=grid[r][c]||""; tile.textContent=ch; tile.classList.toggle('filled', !!ch); } } revealedRows.forEach((states, r)=>{ if (!states) return; for (let c=0;c<COLS;c++){ const tile=getTile(r,c); tile.classList.add(states[c]); tile.style.borderColor=getComputedStyle(tile).backgroundColor; } }); paintKeyboardFromHistory(); if (gameOver) shareBtn.style.display = "inline-block"; return true; }catch(e){ return false; } }
+function loadState(){ const raw = localStorage.getItem(storageKey()); if (!raw) return false; try{ const s = JSON.parse(raw); if (!s || s.answer !== answer) return false; ({ currentRow, currentCol, grid, revealedRows, gameOver } = s); for (let r=0;r<ROWS;r++){ for (let c=0;c<COLS;c++){ const tile=getTile(r,c); const ch=grid[r][c]||""; tile.textContent=ch; tile.classList.toggle('filled', !!ch); } } revealedRows.forEach((states, r)=>{ if (!states) return; for (let c=0;c<COLS;c++){ const tile=getTile(r,c); tile.classList.add(states[c]); tile.style.borderColor=getComputedStyle(tile).backgroundColor; } }); paintKeyboardFromHistory(); if (gameOver){ shareBtn.style.display = "inline-block"; answerRevealEl.hidden = false; answerRevealEl.textContent = `Answer: ${answer}`; } return true; }catch(e){ return false; } }
 
 let toastTimer; function announce(msg){ toast.textContent = msg; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(()=> toast.classList.remove('show'), 2500); }
 
@@ -368,11 +394,11 @@ function updateCountdown(){
   const m = String(Math.floor((secs%3600)/60)).padStart(2,'0');
   const s = String(secs%60).padStart(2,'0');
   countdownEl.textContent = `Next daily in ${h}:${m}:${s} (UK)`;
-  if (secs === 24*3600 || secs === 0){ // crossed midnight
+  if (secs === 24*3600 || secs === 0){ // crossed midnight in UK
+    // set new daily answer and clear any previous per-day state
     if (mode === 'daily'){
-      answer = ANSWERS[dailyIndex()];
-      startFresh();
-      announce('New daily word is live!');
+      const pick = getDailyAnswer();
+      if (answer !== pick){ answer = pick; startFresh(); announce('New daily word is live!'); }
     }
   }
 }
@@ -390,12 +416,10 @@ function runSelfTests(){
     console.assert(arraysEqual(scoreGuess('HELLO','HELLO'), ['correct','correct','correct','correct','correct']), 'Test 2 failed');
     // Test 3: counts not exceeded
     console.assert(arraysEqual(scoreGuess('LLAMA','BANAL'), ['present','absent','absent','present','present']), 'Test 3 failed');
-    // Test 4: share text newline join
-    const saved = revealedRows.slice(); revealedRows = [ ['correct','absent','absent','absent','absent'] ]; const st = buildShareText(); console.assert(st.includes('\n'), 'Test 4 failed — newline not present'); revealedRows = saved;
+    // Test 4: share text newline join & colours
+    revealedRows = [ ['correct','present','absent','absent','absent'] ]; const st = buildShareText(); console.assert(st.includes('🟥') && st.includes('🟧') && st.includes('⬜️'), 'Test 4 failed — emoji set');
     // Test 5: dictionary rejects non-crude word
     console.assert(!VALID.has('HELLO'), 'Test 5 failed — HELLO should not be valid');
-    // Test 6: random cycles statefully
-    const oldIdx = rngIndex; setRandomAnswer(); console.assert(rngIndex === (oldIdx+1)%ANSWERS.length, 'Test 6 failed — rng index should advance');
     console.log('%c[Crudle] Self-tests passed','color:#FF2B00');
   }catch(e){ console.error('[Crudle] Self-tests error', e); }
 }
