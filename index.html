@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>KarmaWordle — Edgy 5‑Letter Wordle</title>
+<title>Crudle — Edgy 5‑Letter Wordle</title>
 <style>
   :root{
     /* Black bg, FF2B00 text, white for incorrect */
@@ -100,13 +100,14 @@
   .small{font-size:.9rem; opacity:.8}
 
   @media (max-width:480px){header{padding:10px 12px} .btn, select, input[type="text"]{padding:8px 10px} .key{padding:10px 8px}}
+  .disclaimer{max-width:900px;margin:0 auto 28px;padding:10px 12px;border:1px solid #2a2a2a;border-radius:10px;background:#0a0a0a;color:var(--tile-text);font-size:.85rem;opacity:.9;text-align:center}
 </style>
 </head>
 <body>
   <header>
-    <div class="brand" aria-label="KarmaWordle">
+    <div class="brand" aria-label="Crudle">
       <div class="mark" aria-hidden="true"></div>
-      <div class="name">KarmaWordle <span class="small" style="font-weight:700; color:#b91c1c">— Edgy Edition</span></div>
+      <div class="name">Crudle <span class="small" style="font-weight:700; color:#b91c1c">— Edgy Edition</span> <span class="small" style="font-weight:700; color:#b91c1c">— Edgy Edition</span></div>
     </div>
     <div class="controls">
       <span id="countdown" title="UK time until next daily"></span>
@@ -114,7 +115,7 @@
       <button class="btn" id="newBtn">New Game</button>
       <button class="btn primary" id="shareBtn" style="display:none">Share</button>
       <!-- karmalogo.png should live next to this HTML file (GitHub Pages root) -->
-      <img class="logo-img" id="cornerLogo" src="karmalogo.png" alt="Karma logo" />
+      <img class="logo-img" id="cornerLogo" src="karmalogo.png" alt="Crudle logo" />
     </div>
   </header>
 
@@ -159,11 +160,12 @@
       <span style="color:#000;background:#FF2B00;border-radius:6px;padding:2px 6px; margin:0 4px">red</span> = in the word but wrong spot (this edition doesn’t distinguish),
       <span style="background:#fff;border-radius:6px;padding:2px 6px; margin:0 4px">white</span> = not in the word. Toggle tabs to switch modes. Custom mode lets you set the secret (or open this file with <code>#word=HELLO</code>).
     </div>
+      <div class="disclaimer" id="disclaimer" role="note">Vibe coded and AI Generated! This project is for satire, so please don't take it seriously!!!</div>
   </main>
 
 <script>
 /* =====================================================
-   KarmaWordle — single file (Edgy Edition)
+   Crudle — single file (Edgy Edition)
    • Daily uses UK (Europe/London) midnight
    • Random cycles through the word list (persistent)
    • Valid-word enforcement (only crude list allowed)
@@ -213,7 +215,7 @@ let currentCol = 0;
 let grid = []; // [['',...], ...]
 let revealedRows = []; // arrays of 'correct'|'present'|'absent'
 let gameOver = false;
-let rngIndex = Number(localStorage.getItem('karma_rngIndex')||0) % Math.max(1, ANSWERS.length);
+let rngIndex = Number(localStorage.getItem('crudle_rngIndex')||0) % Math.max(1, ANSWERS.length);
 
 // ---- UK (Europe/London) helpers ----
 function ukParts(date = new Date()){
@@ -242,7 +244,7 @@ function secondsUntilNextUKMidnight(now = new Date()){
 function setRandomAnswer(){
   answer = ANSWERS[rngIndex];
   rngIndex = (rngIndex + 1) % ANSWERS.length;
-  localStorage.setItem('karma_rngIndex', String(rngIndex));
+  localStorage.setItem('crudle_rngIndex', String(rngIndex));
 }
 
 // ---- Game logic ----
@@ -334,10 +336,10 @@ function rowShake(r){ const row=board.children[r]; row.classList.remove('shake')
 function updateKeyboardKey(letter, state){ letter = letter.toUpperCase(); const key = [...document.querySelectorAll('.key')].find(k => k.dataset.key === letter); if (!key) return; const priority = { absent: 1, present: 2, correct: 3 }; const current = key.dataset.state || "none"; if (current !== "none" && priority[current] >= priority[state]) return; key.dataset.state = state; key.classList.remove('absent','present','correct'); key.classList.add(state); }
 function paintKeyboardFromHistory(){ document.querySelectorAll('.key').forEach(k=>{ k.dataset.state = "none"; k.classList.remove('absent','present','correct'); }); revealedRows.forEach((rowStates, r)=>{ if (!rowStates) return; for (let i=0;i<COLS;i++){ const letter = (grid[r][i]||"").toUpperCase(); if (letter) updateKeyboardKey(letter, rowStates[i]); } }); }
 
-function buildShareText(){ const header = `KarmaWordle — ${mode === "daily" ? new Date().toLocaleDateString('en-GB',{ timeZone:'Europe/London' }) : mode}`; const scoreLine = gameOver && revealedRows[currentRow]?.every(s=>s==='correct') ? `${currentRow+1}/${ROWS}` : `${revealedRows.filter(Boolean).length}/${ROWS}`; const emojiRows = revealedRows.filter(Boolean).map(states => states.map(s => (s==='correct' || s==='present') ? '🟥' : '⬜️').join('')).join('\n'); let link = ''; if (mode === "custom"){ const token = answer.toUpperCase(); link = `\nCustom link: ${location.href.split('#')[0]}#word=${token}`; } return `${header}\n${scoreLine}\n${emojiRows}${link}`; }
+function buildShareText(){ const header = `Crudle — ${mode === "daily" ? new Date().toLocaleDateString('en-GB',{ timeZone:'Europe/London' }) : mode}`; const scoreLine = gameOver && revealedRows[currentRow]?.every(s=>s==='correct') ? `${currentRow+1}/${ROWS}` : `${revealedRows.filter(Boolean).length}/${ROWS}`; const emojiRows = revealedRows.filter(Boolean).map(states => states.map(s => (s==='correct' || s==='present') ? '🟥' : '⬜️').join('')).join('\n'); let link = ''; if (mode === "custom"){ const token = answer.toUpperCase(); link = `\nCustom link: ${location.href.split('#')[0]}#word=${token}`; } return `${header}\n${scoreLine}\n${emojiRows}${link}`; }
 async function shareResults(){ const text = buildShareText(); try{ await navigator.clipboard.writeText(text); announce("Result copied to clipboard!"); }catch(e){ announce("Copy failed — text printed in console."); console.log(text); }}
 
-function storageKey(){ let base = `karmawordle:${mode}`; if (mode==='daily'){ const t=ukParts(); base += `:${t.year}-${t.month}-${t.day}`; } if (mode==='custom') base += `:${answer}`; return base; }
+function storageKey(){ let base = `crudle:${mode}`; if (mode==='daily'){ const t=ukParts(); base += `:${t.year}-${t.month}-${t.day}`; } if (mode==='custom') base += `:${answer}`; return base; }
 function saveState(){ const payload = { answer, mode, currentRow, currentCol, grid, revealedRows, gameOver }; try{ localStorage.setItem(storageKey(), JSON.stringify(payload)); }catch(e){} }
 function loadState(){ const raw = localStorage.getItem(storageKey()); if (!raw) return false; try{ const s = JSON.parse(raw); if (!s || s.answer !== answer) return false; ({ currentRow, currentCol, grid, revealedRows, gameOver } = s); for (let r=0;r<ROWS;r++){ for (let c=0;c<COLS;c++){ const tile=getTile(r,c); const ch=grid[r][c]||""; tile.textContent=ch; tile.classList.toggle('filled', !!ch); } } revealedRows.forEach((states, r)=>{ if (!states) return; for (let c=0;c<COLS;c++){ const tile=getTile(r,c); tile.classList.add(states[c]); tile.style.borderColor=getComputedStyle(tile).backgroundColor; } }); paintKeyboardFromHistory(); if (gameOver) shareBtn.style.display = "inline-block"; return true; }catch(e){ return false; } }
 
@@ -394,8 +396,8 @@ function runSelfTests(){
     console.assert(!VALID.has('HELLO'), 'Test 5 failed — HELLO should not be valid');
     // Test 6: random cycles statefully
     const oldIdx = rngIndex; setRandomAnswer(); console.assert(rngIndex === (oldIdx+1)%ANSWERS.length, 'Test 6 failed — rng index should advance');
-    console.log('%c[KarmaWordle] Self-tests passed','color:#FF2B00');
-  }catch(e){ console.error('[KarmaWordle] Self-tests error', e); }
+    console.log('%c[Crudle] Self-tests passed','color:#FF2B00');
+  }catch(e){ console.error('[Crudle] Self-tests error', e); }
 }
 
 (function init(){
