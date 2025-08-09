@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KarmaWordle — Edgy 5‑Letter Wordle</title>
+<style>
+  :root{
+    /* Black bg, FF2B00 text, white for incorrect */
+    --bg-start:#000000;
+    --bg-end:#000000;
+    --tile-bg:#000000;
+    --tile-border:#333333;
+    --tile-text:#FF2B00;  /* default titles & text */
+    --kbd-bg:#000000;
+    --kbd-text:#FF2B00;
+    --accent:#FF2B00;     /* buttons & accents */
+
+    --correct:#FF2B00;    /* correct letters */
+    --present:#FF2B00;    /* treat present like correct (red) */
+    --absent:#FFFFFF;     /* incorrect letters */
+
+    --shadow:0 8px 24px rgba(0,0,0,.35);
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:linear-gradient(180deg,var(--bg-start),var(--bg-end));
+    color:var(--tile-text);
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji","Segoe UI Emoji";
+    display:flex; flex-direction:column; align-items:center;
+  }
+  header{
+    width:min(900px,100%);
+    padding:14px 18px;
+    display:flex; align-items:center; justify-content:space-between;
+    position:sticky; top:0; backdrop-filter:saturate(1.2) blur(4px);
+    background:rgba(0,0,0,.75); border-bottom:1px solid #222;
+    z-index:5;
+  }
+  .brand{display:flex; align-items:center; gap:12px; font-weight:800; letter-spacing:.3px}
+  .brand .mark{width:32px; height:32px; border-radius:10px; background: radial-gradient(circle at 30% 30%, #fff, #ffe5e5); border:1px solid var(--tile-border)}
+  .brand .name{font-size:1.05rem}
+  .controls{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+  .btn, select, input[type="text"]{
+    background:var(--kbd-bg); color:var(--kbd-text); border:1px solid var(--tile-border);
+    padding:10px 12px; border-radius:12px; cursor:pointer; font-weight:700;
+    transition:.15s transform ease, .2s background ease, .2s border-color ease, .2s opacity ease;
+  }
+  .btn:hover{transform:translateY(-1px)}
+  .btn:active{transform:translateY(0)}
+  .btn.primary{background:var(--accent); color:#fff; border-color:transparent}
+  .btn.ghost{background:transparent}
+  .logo-img{width:44px; height:44px; object-fit:cover; border-radius:999px; border:1px solid var(--tile-border); box-shadow:0 6px 16px rgba(239,68,68,.35)}
+  .hint{opacity:.85; font-size:.9rem}
+  #countdown{font-weight:800; color:#FF2B00; padding:6px 8px; border:1px solid #2a2a2a; border-radius:10px}
+
+  main{width:min(900px,100%); padding:16px; display:flex; flex-direction:column; gap:18px; align-items:center; margin:0 auto 24px}
+  .tabs{display:flex; gap:6px; background:#0a0a0a; padding:6px; border-radius:12px; border:1px solid var(--tile-border)}
+  .tab{padding:8px 12px; border-radius:10px; cursor:pointer; font-weight:800; opacity:.9; color:#FF2B00}
+  .tab.active{background:#111; opacity:1; border:1px solid var(--tile-border)}
+  .tabpanel{display:none; width:100%}
+  .tabpanel.active{display:block}
+  .panel-row{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+  .panel-row input[type="text"]{text-transform:uppercase; letter-spacing:2px}
+
+  #board{margin-top:6px; display:grid; grid-template-rows: repeat(6, 1fr); gap:10px; width:min(560px, 92vw); aspect-ratio: 5 / 6; touch-action: manipulation}
+  .row{display:grid; grid-template-columns: repeat(5, 1fr); gap:10px}
+  .tile{
+    border:2px solid var(--tile-border); background:var(--tile-bg); border-radius:var(--radius);
+    display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow);
+    font-size: clamp(1.2rem, 4vw, 2rem); font-weight:900; user-select:none; text-transform:uppercase;
+  }
+  .tile.filled{border-color:#f1c0c0}
+  .tile.reveal{animation: flip .55s ease forwards; transform-origin:center bottom; will-change:transform, background, border, color}
+  @keyframes flip{0%{transform:rotateX(0)}45%{transform:rotateX(-90deg)}55%{transform:rotateX(-90deg)}100%{transform:rotateX(0)}}
+  .tile.correct { background: var(--correct); border-color: var(--correct); color:#000 }
+  .tile.present { background: var(--present); border-color: var(--present); color:#000 }
+  .tile.absent  { background: var(--absent);  border-color: var(--absent);  color:#000 }
+
+  .shake{animation: shake .35s ease}
+  @keyframes shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(4px)}30%,50%,70%{transform:translateX(-6px)}40%,60%{transform:translateX(6px)}}
+  .pop{animation: pop .12s ease}
+  @keyframes pop{0%{transform:scale(0.93)}100%{transform:scale(1)}}
+
+  #keyboard{display:grid; gap:8px; width:min(900px, 100%); margin-top:8px; user-select:none}
+  .kbrow{display:flex; gap:8px; justify-content:center}
+  .key{background:#0a0a0a; color:var(--kbd-text); border:1px solid var(--tile-border); padding:12px 10px; border-radius:10px; font-weight:800; min-width:34px; text-align:center; cursor:pointer; box-shadow:var(--shadow); transition:.15s transform ease,.2s background ease,.2s border-color ease,.2s color ease}
+  .key.wide{min-width:72px}
+  .key.correct{background:var(--correct); border-color:var(--correct); color:#000}
+  .key.present{background:var(--present); border-color:var(--present); color:#000}
+  .key.absent{background:var(--absent); border-color:var(--absent); color:#000}
+
+  .toast{min-height:40px; padding:10px 14px; background:#0a0a0a; border:1px solid var(--tile-border); border-radius:12px; box-shadow:var(--shadow); opacity:0; transform:translateY(6px); transition:.25s opacity ease,.25s transform ease; text-align:center; font-weight:700}
+  .toast.show{opacity:1; transform:translateY(0)}
+  .footer-cta{display:flex; gap:10px; margin-top:8px; flex-wrap:wrap; justify-content:center}
+  .help{max-width:900px; margin:10px auto 0; line-height:1.5; font-size:.95rem; opacity:.95}
+  .small{font-size:.9rem; opacity:.8}
+
+  @media (max-width:480px){header{padding:10px 12px} .btn, select, input[type="text"]{padding:8px 10px} .key{padding:10px 8px}}
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand" aria-label="KarmaWordle">
+      <div class="mark" aria-hidden="true"></div>
+      <div class="name">KarmaWordle <span class="small" style="font-weight:700; color:#b91c1c">— Edgy Edition</span></div>
+    </div>
+    <div class="controls">
+      <span id="countdown" title="UK time until next daily"></span>
+      <button class="btn ghost" id="helpBtn" title="How to play">?</button>
+      <button class="btn" id="newBtn">New Game</button>
+      <button class="btn primary" id="shareBtn" style="display:none">Share</button>
+      <!-- karmalogo.png should live next to this HTML file (GitHub Pages root) -->
+      <img class="logo-img" id="cornerLogo" src="karmalogo.png" alt="Karma logo" />
+    </div>
+  </header>
+
+  <main>
+    <div class="tabs" role="tablist" aria-label="Modes">
+      <div class="tab active" data-tab="daily" role="tab" aria-selected="true" tabindex="0">Daily</div>
+      <div class="tab" data-tab="random" role="tab" aria-selected="false" tabindex="-1">Random</div>
+      <div class="tab" data-tab="custom" role="tab" aria-selected="false" tabindex="-1">Custom</div>
+    </div>
+
+    <section class="tabpanel active" data-panel="daily" role="tabpanel" aria-label="Daily settings">
+      <div class="panel-row"><span class="hint">Daily puzzle changes each day (contains vulgar words). UK midnight reset.</span></div>
+    </section>
+    <section class="tabpanel" data-panel="random" role="tabpanel" aria-label="Random settings">
+      <div class="panel-row">
+        <button class="btn" id="rngBtn">Next Random Word</button>
+        <span class="hint">Cycles through the list in order.</span>
+      </div>
+    </section>
+    <section class="tabpanel" data-panel="custom" role="tabpanel" aria-label="Custom settings">
+      <div class="panel-row">
+        <input id="customWord" maxlength="5" placeholder="SECRET" aria-label="Custom secret word (5 letters)" />
+        <button class="btn" id="setCustomBtn">Set Secret</button>
+        <button class="btn" id="linkBtn">Make Challenge Link</button>
+        <span class="hint">Use #word=HELLO in the URL to pre-set a word.</span>
+      </div>
+    </section>
+
+    <div id="board" role="grid" aria-label="Word grid"></div>
+
+    <div id="keyboard" aria-label="On-screen keyboard">
+      <div class="kbrow" data-row="1"></div>
+      <div class="kbrow" data-row="2"></div>
+      <div class="kbrow" data-row="3"></div>
+    </div>
+
+    <div class="footer-cta"><div class="toast" id="toast" role="status" aria-live="polite"></div></div>
+
+    <div class="help" id="helpText" hidden>
+      <strong>How to play:</strong> Guess the 5-letter word in 6 tries. This edition uses <em>explicit/vulgar</em> vocabulary — play responsibly. After each guess, tiles flip:
+      <span style="color:#000;background:#FF2B00;border-radius:6px;padding:2px 6px; margin:0 4px">red</span> = right letter & spot,
+      <span style="color:#000;background:#FF2B00;border-radius:6px;padding:2px 6px; margin:0 4px">red</span> = in the word but wrong spot (this edition doesn’t distinguish),
+      <span style="background:#fff;border-radius:6px;padding:2px 6px; margin:0 4px">white</span> = not in the word. Toggle tabs to switch modes. Custom mode lets you set the secret (or open this file with <code>#word=HELLO</code>).
+    </div>
+  </main>
+
+<script>
+/* =====================================================
+   KarmaWordle — single file (Edgy Edition)
+   • Daily uses UK (Europe/London) midnight
+   • Random cycles through the word list (persistent)
+   • Valid-word enforcement (only crude list allowed)
+   • Share results (emoji grid)
+   • Proper duplicate-letter scoring
+   ===================================================== */
+
+// ---- Edgy 5-letter answers (no protected-class slurs). Uppercase only. ----
+const ANSWERS = [
+  "BITCH","PRICK","DICKS","PENIS","BOOBS","BOOBY","TITTY","PUSSY","SLUTS","WHORE",
+  "SKANK","SCREW","SHITE","SHITS","PISSY","ARSES","ASSES","BALLS","COCKS","COCKY",
+  "DONGS","SHAFT","SHAGS","WANKS","SPANK","BONER","HORNY","NUDES","NUDIE","PORNO",
+  "SUCKS","SUCKY","JERKS","JERKY","SMUTS","FUGLY","CRAPS","POOPS","POOPY","TURDS",
+  "VOMIT","BARFS","FARTS","FARTY","WHIZZ","URINE","SPERM","QUEEF","SCUMS","TRASH",
+  "TRAMP","GONAD","DILDO","ANALS","MOOBS","PERVS","PERVY","SLAGS","HUSSY","BOINK",
+  "DOINK","NASTY","HUMPS","TAINT","GOOCH","PUBES","PUBIC","CRABS","BONED","ORALS",
+  "WANKY","TWATS","TURDY","TITTS","BOINK","SNUFF","SMUTY","BOOZY","TARTY","RUDER"
+].filter(w => w.length === 5).map(w => w.toUpperCase());
+
+// Allow guesses = ANSWERS (strict). If you want a larger set, extend here.
+const VALID = new Set(ANSWERS);
+
+// Keyboard layout
+const KB_ROWS = ["QWERTYUIOP","ASDFGHJKL","ENTERZXCVBNM⌫"];
+
+const ROWS = 6, COLS = 5;
+const board = document.getElementById('board');
+const keyboard = document.getElementById('keyboard');
+const toast = document.getElementById('toast');
+const shareBtn = document.getElementById('shareBtn');
+const newBtn = document.getElementById('newBtn');
+const rngBtn = document.getElementById('rngBtn');
+const helpBtn = document.getElementById('helpBtn');
+const helpText = document.getElementById('helpText');
+const countdownEl = document.getElementById('countdown');
+
+const tabs = [...document.querySelectorAll('.tab')];
+const panels = [...document.querySelectorAll('.tabpanel')];
+const customInput = document.getElementById('customWord');
+const setCustomBtn = document.getElementById('setCustomBtn');
+const linkBtn = document.getElementById('linkBtn');
+
+let mode = "daily"; // "daily" | "random" | "custom"
+let answer = "";
+let currentRow = 0;
+let currentCol = 0;
+let grid = []; // [['',...], ...]
+let revealedRows = []; // arrays of 'correct'|'present'|'absent'
+let gameOver = false;
+let rngIndex = Number(localStorage.getItem('karma_rngIndex')||0) % Math.max(1, ANSWERS.length);
+
+// ---- UK (Europe/London) helpers ----
+function ukParts(date = new Date()){
+  const f = new Intl.DateTimeFormat('en-GB', { timeZone:'Europe/London', hour12:false,
+    year:'numeric', month:'numeric', day:'numeric', hour:'numeric', minute:'numeric', second:'numeric' });
+  const p = f.formatToParts(date);
+  const get = t => Number(p.find(x=>x.type===t).value);
+  return { year:get('year'), month:get('month'), day:get('day'), hour:get('hour'), minute:get('minute'), second:get('second') };
+}
+function dailyIndex(date = new Date()){
+  const a = { year:2022, month:1, day:1 };
+  const t = ukParts(date);
+  // Treat dates as UTC days to avoid DST math; we only care about day count, not clock hours
+  const anchor = Date.UTC(a.year, a.month-1, a.day);
+  const today = Date.UTC(t.year, t.month-1, t.day);
+  const days = Math.floor((today - anchor) / 86400000);
+  return ((days % ANSWERS.length) + ANSWERS.length) % ANSWERS.length;
+}
+function secondsUntilNextUKMidnight(now = new Date()){
+  const t = ukParts(now);
+  const totalNow = t.hour*3600 + t.minute*60 + t.second;
+  return 24*3600 - totalNow; // seconds left in the UK day
+}
+
+// ---- Random cycling ----
+function setRandomAnswer(){
+  answer = ANSWERS[rngIndex];
+  rngIndex = (rngIndex + 1) % ANSWERS.length;
+  localStorage.setItem('karma_rngIndex', String(rngIndex));
+}
+
+// ---- Game logic ----
+function rnd(n){ return Math.floor(Math.random()*n); }
+function wordFromHash(){ const h = decodeURIComponent((location.hash||"").trim()); const m = h.match(/#word=([A-Za-z]{5})$/); return m ? m[1].toUpperCase() : null; }
+
+function scoreGuess(guess, target){
+  guess = guess.toUpperCase(); target = target.toUpperCase();
+  const res = Array(COLS).fill('absent');
+  const counts = {};
+  for (let i=0;i<COLS;i++){
+    if (guess[i] === target[i]) res[i] = 'correct';
+    else counts[target[i]] = (counts[target[i]]||0)+1;
+  }
+  for (let i=0;i<COLS;i++){
+    if (res[i] !== 'correct'){
+      const g = guess[i];
+      if (counts[g] > 0){ res[i] = 'present'; counts[g]--; }
+    }
+  }
+  return res;
+}
+
+function buildBoard(){
+  board.innerHTML = ""; grid = Array.from({length:ROWS}, ()=> Array(COLS).fill("")); revealedRows = [];
+  for (let r=0;r<ROWS;r++){
+    const row=document.createElement('div'); row.className='row';
+    for (let c=0;c<COLS;c++){ const tile=document.createElement('div'); tile.className='tile'; tile.setAttribute('role','gridcell'); row.appendChild(tile); }
+    board.appendChild(row);
+  }
+  currentRow = 0; currentCol = 0; gameOver = false; shareBtn.style.display = "none";
+}
+
+function mkKey(label, wide=false, dataOverride=null){ const key = document.createElement('button'); key.className='key'+(wide?' wide':''); key.type='button'; key.textContent = label; key.dataset.key = dataOverride || label; key.addEventListener('click', ()=> handleInput(key.dataset.key)); return key; }
+function buildKeyboard(){ const rows = keyboard.querySelectorAll('.kbrow'); rows[0].innerHTML = ""; for (const ch of "QWERTYUIOP") rows[0].appendChild(mkKey(ch)); rows[1].innerHTML = ""; for (const ch of "ASDFGHJKL") rows[1].appendChild(mkKey(ch)); rows[2].innerHTML = ""; rows[2].appendChild(mkKey("ENTER", true)); for (const ch of "ZXCVBNM") rows[2].appendChild(mkKey(ch)); rows[2].appendChild(mkKey("⌫", true, "BACKSPACE")); }
+
+function setMode(newMode){
+  mode = newMode;
+  tabs.forEach(t=>{ const active = t.dataset.tab === mode; t.classList.toggle('active', active); t.setAttribute('aria-selected', active ? 'true' : 'false'); t.tabIndex = active ? 0 : -1; });
+  panels.forEach(p=> p.classList.toggle('active', p.dataset.panel === mode));
+  pickAnswer(); startFresh();
+}
+
+function pickAnswer(){
+  const hashWord = wordFromHash();
+  if (hashWord){ answer = hashWord; mode = "custom"; tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === "custom")); panels.forEach(p => p.classList.toggle('active', p.dataset.panel === "custom")); return; }
+  if (mode === "custom"){
+    const cw = (customInput.value||"").toUpperCase().replace(/[^A-Z]/g,''); answer = cw.length===5 ? cw : ANSWERS[dailyIndex()];
+  } else if (mode === "daily"){
+    answer = ANSWERS[dailyIndex()];
+  } else {
+    setRandomAnswer();
+  }
+}
+
+function startFresh(){ buildBoard(); paintKeyboardFromHistory(); saveState(); announce(`New ${mode} game started.`); }
+function getTile(r,c){ return board.children[r].children[c]; }
+function drawCurrentRow(){ for (let c=0;c<COLS;c++){ const tile=getTile(currentRow,c); tile.textContent=grid[currentRow][c]||""; tile.classList.toggle('filled', !!grid[currentRow][c]); } }
+
+function handleInput(key){
+  if (gameOver) return;
+  if (key === 'ENTER'){ submitGuess(); return; }
+  if (key === 'BACKSPACE' || key === '⌫'){ if (currentCol>0){ currentCol--; grid[currentRow][currentCol]=""; drawCurrentRow(); } else { rowShake(currentRow);} return; }
+  if (/^[A-Z]$/.test(key)){ if (currentCol<COLS){ grid[currentRow][currentCol]=key; currentCol++; drawCurrentRow(); popTile(currentRow,currentCol-1);} }
+}
+
+function submitGuess(){
+  const guess = grid[currentRow].join('');
+  if (guess.length < COLS){ rowShake(currentRow); announce("Not enough letters."); return; }
+  if (!VALID.has(guess.toUpperCase())){ rowShake(currentRow); announce("Not in crude word list."); return; }
+  revealGuess(guess);
+}
+
+function revealGuess(guess){
+  const result = scoreGuess(guess, answer); revealedRows[currentRow] = result;
+  const delay = 140; result.forEach((state, idx)=>{ const tile=getTile(currentRow,idx); setTimeout(()=>{ tile.classList.add('reveal'); setTimeout(()=>{ tile.classList.add(state); tile.style.borderColor = getComputedStyle(tile).backgroundColor; updateKeyboardKey(guess[idx], state); }, 280); }, idx*delay); });
+  const finishDelay = COLS*delay + 420; setTimeout(()=>{
+    const won = result.every(s => s==='correct'); // robust: only win if all positions correct
+    if (won){ gameOver = true; shareBtn.style.display = "inline-block"; announce(victoryMessage()); }
+    else if (currentRow === ROWS-1){ gameOver = true; shareBtn.style.display = "inline-block"; announce(`Unlucky! The word was ${answer}.`); }
+    else { currentRow++; currentCol = 0; }
+    saveState();
+  }, finishDelay);
+}
+
+function popTile(r,c){ const tile=getTile(r,c); tile.classList.remove('pop'); void tile.offsetWidth; tile.classList.add('pop'); }
+function rowShake(r){ const row=board.children[r]; row.classList.remove('shake'); void row.offsetWidth; row.classList.add('shake'); setTimeout(()=> row.classList.remove('shake'), 400); }
+
+function updateKeyboardKey(letter, state){ letter = letter.toUpperCase(); const key = [...document.querySelectorAll('.key')].find(k => k.dataset.key === letter); if (!key) return; const priority = { absent: 1, present: 2, correct: 3 }; const current = key.dataset.state || "none"; if (current !== "none" && priority[current] >= priority[state]) return; key.dataset.state = state; key.classList.remove('absent','present','correct'); key.classList.add(state); }
+function paintKeyboardFromHistory(){ document.querySelectorAll('.key').forEach(k=>{ k.dataset.state = "none"; k.classList.remove('absent','present','correct'); }); revealedRows.forEach((rowStates, r)=>{ if (!rowStates) return; for (let i=0;i<COLS;i++){ const letter = (grid[r][i]||"").toUpperCase(); if (letter) updateKeyboardKey(letter, rowStates[i]); } }); }
+
+function buildShareText(){ const header = `KarmaWordle — ${mode === "daily" ? new Date().toLocaleDateString('en-GB',{ timeZone:'Europe/London' }) : mode}`; const scoreLine = gameOver && revealedRows[currentRow]?.every(s=>s==='correct') ? `${currentRow+1}/${ROWS}` : `${revealedRows.filter(Boolean).length}/${ROWS}`; const emojiRows = revealedRows.filter(Boolean).map(states => states.map(s => (s==='correct' || s==='present') ? '🟥' : '⬜️').join('')).join('\n'); let link = ''; if (mode === "custom"){ const token = answer.toUpperCase(); link = `\nCustom link: ${location.href.split('#')[0]}#word=${token}`; } return `${header}\n${scoreLine}\n${emojiRows}${link}`; }
+async function shareResults(){ const text = buildShareText(); try{ await navigator.clipboard.writeText(text); announce("Result copied to clipboard!"); }catch(e){ announce("Copy failed — text printed in console."); console.log(text); }}
+
+function storageKey(){ let base = `karmawordle:${mode}`; if (mode==='daily'){ const t=ukParts(); base += `:${t.year}-${t.month}-${t.day}`; } if (mode==='custom') base += `:${answer}`; return base; }
+function saveState(){ const payload = { answer, mode, currentRow, currentCol, grid, revealedRows, gameOver }; try{ localStorage.setItem(storageKey(), JSON.stringify(payload)); }catch(e){} }
+function loadState(){ const raw = localStorage.getItem(storageKey()); if (!raw) return false; try{ const s = JSON.parse(raw); if (!s || s.answer !== answer) return false; ({ currentRow, currentCol, grid, revealedRows, gameOver } = s); for (let r=0;r<ROWS;r++){ for (let c=0;c<COLS;c++){ const tile=getTile(r,c); const ch=grid[r][c]||""; tile.textContent=ch; tile.classList.toggle('filled', !!ch); } } revealedRows.forEach((states, r)=>{ if (!states) return; for (let c=0;c<COLS;c++){ const tile=getTile(r,c); tile.classList.add(states[c]); tile.style.borderColor=getComputedStyle(tile).backgroundColor; } }); paintKeyboardFromHistory(); if (gameOver) shareBtn.style.display = "inline-block"; return true; }catch(e){ return false; } }
+
+let toastTimer; function announce(msg){ toast.textContent = msg; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(()=> toast.classList.remove('show'), 2500); }
+
+// Tabs & Buttons
+tabs.forEach(t=>{ t.addEventListener('click', ()=> setMode(t.dataset.tab)); t.addEventListener('keydown', e=>{ if (e.key===' '||e.key==='Enter'){ e.preventDefault(); setMode(t.dataset.tab); } }); });
+newBtn.addEventListener('click', ()=> { pickAnswer(); startFresh(); });
+rngBtn?.addEventListener('click', ()=> { mode='random'; setRandomAnswer(); startFresh(); announce(`Random word set (#${(rngIndex||ANSWERS.length)-1})`); });
+shareBtn.addEventListener('click', shareResults);
+helpBtn.addEventListener('click', ()=>{ helpText.hidden = !helpText.hidden; helpBtn.textContent = helpText.hidden ? '?' : '×'; });
+
+// Custom controls
+setCustomBtn.addEventListener('click', ()=>{ const w=(customInput.value||"").toUpperCase().replace(/[^A-Z]/g,''); if (w.length!==5) return announce("Custom word must be 5 letters (A–Z)."); mode='custom'; answer=w; setMode('custom'); announce(`Custom word set. Good luck!`); });
+linkBtn.addEventListener('click', ()=>{ const w=(customInput.value||"").toUpperCase().replace(/[^A-Z]/g,''); if (w.length!==5) return announce("Enter a 5-letter word first."); const base=location.href.split('#')[0]; const url=`${base}#word=${w}`; navigator.clipboard.writeText(url).then(()=> announce("Challenge link copied!")) .catch(()=>{ announce("Could not copy; check console."); console.log(url); }); });
+
+// Physical keyboard
+window.addEventListener('keydown', (e)=>{ if (gameOver && e.key !== 'Enter') return; const k=e.key; if (/^[a-zA-Z]$/.test(k)) handleInput(k.toUpperCase()); else if (k==='Backspace') handleInput('BACKSPACE'); else if (k==='Enter') handleInput('ENTER'); });
+
+function victoryMessage(){ const msgs=["Karma strikes!","Red hot win!","Spicy!","Edgy genius.","Filthy good."]; return msgs[Math.floor(Math.random()*msgs.length)]; }
+
+// ---- Countdown (UK midnight) ----
+function updateCountdown(){
+  const secs = secondsUntilNextUKMidnight();
+  const h = String(Math.floor(secs/3600)).padStart(2,'0');
+  const m = String(Math.floor((secs%3600)/60)).padStart(2,'0');
+  const s = String(secs%60).padStart(2,'0');
+  countdownEl.textContent = `Next daily in ${h}:${m}:${s} (UK)`;
+  if (secs === 24*3600 || secs === 0){ // crossed midnight
+    if (mode === 'daily'){
+      answer = ANSWERS[dailyIndex()];
+      startFresh();
+      announce('New daily word is live!');
+    }
+  }
+}
+setInterval(updateCountdown, 1000);
+
+/* =============================
+   Minimal self-tests (console)
+   ============================= */
+function arraysEqual(a,b){ return a.length===b.length && a.every((v,i)=>v===b[i]); }
+function runSelfTests(){
+  try{
+    // Test 1: duplicate letters handling
+    console.assert(arraysEqual(scoreGuess('SHELL','HELLO'), ['absent','present','present','correct','present']), 'Test 1 failed');
+    // Test 2: exact match
+    console.assert(arraysEqual(scoreGuess('HELLO','HELLO'), ['correct','correct','correct','correct','correct']), 'Test 2 failed');
+    // Test 3: counts not exceeded
+    console.assert(arraysEqual(scoreGuess('LLAMA','BANAL'), ['present','absent','absent','present','present']), 'Test 3 failed');
+    // Test 4: share text newline join
+    const saved = revealedRows.slice(); revealedRows = [ ['correct','absent','absent','absent','absent'] ]; const st = buildShareText(); console.assert(st.includes('\n'), 'Test 4 failed — newline not present'); revealedRows = saved;
+    // Test 5: dictionary rejects non-crude word
+    console.assert(!VALID.has('HELLO'), 'Test 5 failed — HELLO should not be valid');
+    // Test 6: random cycles statefully
+    const oldIdx = rngIndex; setRandomAnswer(); console.assert(rngIndex === (oldIdx+1)%ANSWERS.length, 'Test 6 failed — rng index should advance');
+    console.log('%c[KarmaWordle] Self-tests passed','color:#FF2B00');
+  }catch(e){ console.error('[KarmaWordle] Self-tests error', e); }
+}
+
+(function init(){
+  buildBoard(); buildKeyboard(); const hword=wordFromHash(); if (hword){ mode='custom'; }
+  setMode(mode); loadState(); runSelfTests(); updateCountdown();
+  // logo diagnostics
+  document.getElementById('cornerLogo').addEventListener('error', ()=>{ console.warn('karmalogo.png not found at site root'); announce('Logo not found (karmalogo.png)'); });
+})();
+</script>
+</body>
+</html>
