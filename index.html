@@ -103,6 +103,14 @@
   .disclaimer{max-width:900px;margin:0 auto 28px;padding:10px 12px;border:1px solid #2a2a2a;border-radius:10px;background:#0a0a0a;color:var(--tile-text);font-size:.85rem;opacity:.9;text-align:center}
 
   @media (max-width:480px){header{padding:10px 12px} .btn, select, input[type="text"]{padding:8px 10px} .key{padding:10px 8px}}
+  /* Mobile helpers */
+  .mobile-key{ position:fixed; left:-9999px; bottom:0; width:1px; height:1px; opacity:0; }
+  @media (max-width:640px){
+    #board{ width:94vw; gap:8px; }
+    .row{ gap:8px; }
+    .tile{ font-size:clamp(1rem,8vw,1.6rem); }
+    .key{ padding:10px 6px; min-width:9vw; }
+  }
 </style>
 </head>
 <body>
@@ -165,6 +173,7 @@
     </div>
 
     <div class="disclaimer" id="disclaimer" role="note">Vibe coded and AI Generated! This project is for satire, so please don’t take it seriously!!!</div>
+      <input id="mobileKey" class="mobile-key" inputmode="latin" autocomplete="off" autocapitalize="characters" spellcheck="false" />
   </main>
 
 <script>
@@ -212,6 +221,9 @@ const panels = [...document.querySelectorAll('.tabpanel')];
 const customInput = document.getElementById('customWord');
 const setCustomBtn = document.getElementById('setCustomBtn');
 const linkBtn = document.getElementById('linkBtn');
+const mobileInput = document.getElementById('mobileKey');
+const isCoarse = window.matchMedia && (window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 640);
+let mobileSetupDone = false;
 
 let mode = "daily"; // "daily" | "random" | "custom"
 let answer = "";
@@ -318,7 +330,7 @@ function pickAnswer(){
   }
 }
 
-function startFresh(){ buildBoard(); paintKeyboardFromHistory(); saveState(); announce(`New ${mode} game started.`); }
+function startFresh(){ buildBoard(); paintKeyboardFromHistory(); resizeBoard(); if (isCoarse && !mobileSetupDone){ enableMobileKeyboard(); mobileSetupDone = true; } saveState(); announce(`New ${mode} game started.`); }
 function getTile(r,c){ return board.children[r].children[c]; }
 function drawCurrentRow(){ for (let c=0;c<COLS;c++){ const tile=getTile(currentRow,c); tile.textContent=grid[currentRow][c]||""; tile.classList.toggle('filled', !!grid[currentRow][c]); } }
 
@@ -343,7 +355,6 @@ function revealGuess(guess){
     const won = result.every(s => s==='correct'); // win only if all positions correct
     if (won){
       gameOver = true; shareBtn.style.display = "inline-block"; announce(victoryMessage());
-      // Optionally reveal answer anyway
       answerRevealEl.hidden = false; answerRevealEl.textContent = `Answer: ${answer}`;
     } else if (currentRow === ROWS-1){
       gameOver = true; shareBtn.style.display = "inline-block";
@@ -371,6 +382,45 @@ function loadState(){ const raw = localStorage.getItem(storageKey()); if (!raw) 
 
 let toastTimer; function announce(msg){ toast.textContent = msg; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(()=> toast.classList.remove('show'), 2500); }
 
+// Responsive board sizing & mobile keyboard
+function resizeBoard(){
+  const vw = Math.min(window.innerWidth, document.documentElement.clientWidth);
+  const vh = Math.min(window.innerHeight, document.documentElement.clientHeight);
+  const gap = vw <= 640 ? 8 : 10;
+  const maxW = Math.min(560, vw*0.94);
+  const widthTile = (maxW - gap*(COLS-1))/COLS;
+  const availH = vh - 360; // leave room for header/tabs/keyboard
+  const heightTile = (availH > 0) ? (availH - gap*(ROWS-1))/ROWS : widthTile;
+  const size = Math.max(34, Math.floor(Math.min(widthTile, heightTile)));
+  board.style.width = `${maxW}px`;
+  board.style.gap = `${gap}px`;
+  Array.from(board.children).forEach(row => row.style.gap = `${gap}px`);
+  board.style.gridTemplateRows = `repeat(${ROWS}, ${size}px)`;
+  Array.from(board.children).forEach(row => row.style.gridTemplateColumns = `repeat(${COLS}, ${size}px)`);
+}
+window.addEventListener('resize', resizeBoard);
+
+function enableMobileKeyboard(){
+  if (!mobileInput) return;
+  const focusInput = ()=> { try{ mobileInput.focus({preventScroll:true}); }catch(_){} };
+  board.addEventListener('click', focusInput);
+  keyboard.addEventListener('click', focusInput);
+  document.addEventListener('touchstart', focusInput, {passive:true});
+  setTimeout(focusInput, 400);
+
+  mobileInput.addEventListener('beforeinput', (e)=>{
+    if (e.data && /^[a-zA-Z]$/.test(e.data)){
+      handleInput(e.data.toUpperCase());
+      mobileInput.value = '';
+      e.preventDefault();
+    }
+  });
+  mobileInput.addEventListener('keydown', (e)=>{
+    if (e.key === 'Enter'){ e.preventDefault(); handleInput('ENTER'); }
+    else if (e.key === 'Backspace'){ e.preventDefault(); handleInput('BACKSPACE'); }
+  });
+}
+
 // Tabs & Buttons
 tabs.forEach(t=>{ t.addEventListener('click', ()=> setMode(t.dataset.tab)); t.addEventListener('keydown', e=>{ if (e.key===' '||e.key==='Enter'){ e.preventDefault(); setMode(t.dataset.tab); } }); });
 newBtn.addEventListener('click', ()=> { pickAnswer(); startFresh(); });
@@ -394,8 +444,7 @@ function updateCountdown(){
   const m = String(Math.floor((secs%3600)/60)).padStart(2,'0');
   const s = String(secs%60).padStart(2,'0');
   countdownEl.textContent = `Next daily in ${h}:${m}:${s} (UK)`;
-  if (secs === 24*3600 || secs === 0){ // crossed midnight in UK
-    // set new daily answer and clear any previous per-day state
+  if (secs === 24*3600 || secs === 0){
     if (mode === 'daily'){
       const pick = getDailyAnswer();
       if (answer !== pick){ answer = pick; startFresh(); announce('New daily word is live!'); }
@@ -410,15 +459,14 @@ setInterval(updateCountdown, 1000);
 function arraysEqual(a,b){ return a.length===b.length && a.every((v,i)=>v===b[i]); }
 function runSelfTests(){
   try{
-    // Test 1: duplicate letters handling
     console.assert(arraysEqual(scoreGuess('SHELL','HELLO'), ['absent','present','present','correct','present']), 'Test 1 failed');
-    // Test 2: exact match
     console.assert(arraysEqual(scoreGuess('HELLO','HELLO'), ['correct','correct','correct','correct','correct']), 'Test 2 failed');
-    // Test 3: counts not exceeded
     console.assert(arraysEqual(scoreGuess('LLAMA','BANAL'), ['present','absent','absent','present','present']), 'Test 3 failed');
-    // Test 4: share text newline join & colours
-    revealedRows = [ ['correct','present','absent','absent','absent'] ]; const st = buildShareText(); console.assert(st.includes('🟥') && st.includes('🟧') && st.includes('⬜️'), 'Test 4 failed — emoji set');
-    // Test 5: dictionary rejects non-crude word
+    const prev = JSON.parse(JSON.stringify(revealedRows));
+    revealedRows = [ ['correct','present','absent','absent','absent'] ];
+    const st = buildShareText();
+    if (!st.includes('🟥') || !st.includes('🟧') || !st.includes('⬜️')) console.error('Test 4 failed — emoji set');
+    revealedRows = prev;
     console.assert(!VALID.has('HELLO'), 'Test 5 failed — HELLO should not be valid');
     console.log('%c[Crudle] Self-tests passed','color:#FF2B00');
   }catch(e){ console.error('[Crudle] Self-tests error', e); }
@@ -427,7 +475,6 @@ function runSelfTests(){
 (function init(){
   buildBoard(); buildKeyboard(); const hword=wordFromHash(); if (hword){ mode='custom'; }
   setMode(mode); loadState(); runSelfTests(); updateCountdown();
-  // logo diagnostics
   document.getElementById('cornerLogo').addEventListener('error', ()=>{ console.warn('karmalogo.png not found at site root'); announce('Logo not found (karmalogo.png)'); });
 })();
 </script>
